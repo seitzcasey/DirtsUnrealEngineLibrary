@@ -16,13 +16,12 @@ class DATAMANAGEMENT_API USoftObjectCollection : public UDataAsset
 	
 	friend class USoftObjectSubsystem;
 
+	// Inherit from this and add your TSoftObjectPtr/TSoftObjectClass properties to be loaded.
+	
 protected:
 	UPROPERTY(EditAnywhere)
 	FName ID;
-
-	// Inherit from this and add your TSoftObjectPtr/TSoftObjectClass properties to be loaded.
 	
-private:
 	/**
 	 * @brief Extracts soft object paths from a given property.
 	 *
@@ -70,12 +69,14 @@ class DATAMANAGEMENT_API USoftObjectSubsystem : public UEngineSubsystem
 	GENERATED_BODY()
 	
 protected:
+	FStreamableManager StreamableManager;
+	
 	// Map to store loaded collections and their objects
 	TMap<FName, TSharedPtr<FStreamableHandle>> LoadedCollections;
 
 	// Protect collections from GC.
 	UPROPERTY()
-	TArray<TObjectPtr<UObject>> AllCollections;
+	TArray<TObjectPtr<USoftObjectCollection>> AllCollections;
 	
 public:
 	inline static FName AlwaysLoadedCollectionName = TEXT("AlwaysLoaded");
@@ -98,13 +99,13 @@ public:
 	void UnloadSoftObjectCollection(const FName CollectionName);
 
 	template<typename TSoftObjectCollection>
-	TSoftObjectCollection* GetLoadedCollectionByID(const FName ID, const FName CollectionName = NAME_None) const
+	TSoftObjectCollection* GetLoadedCollectionByID(const FName ID) const
 	{
-		return Cast<TSoftObjectCollection>(K2_GetLoadedCollectionByID(ID, CollectionName));
+		return Cast<TSoftObjectCollection>(K2_GetLoadedCollectionByID(ID));
 	}
 
 	UFUNCTION(BlueprintCallable, meta = (DisplayName = "Get Loaded Collection By ID"))
-	USoftObjectCollection* K2_GetLoadedCollectionByID(const FName ID, const FName CollectionName = NAME_None) const;
+	USoftObjectCollection* K2_GetLoadedCollectionByID(const FName ID) const;
 
 protected:
 	// Loads all collection containers into memory so they're ready for dynamic load/unload.
@@ -123,7 +124,4 @@ protected:
 	virtual void GetAlwaysLoadedSoftObjectsToLoad(TArray<FSoftObjectPath>& SoftObjectPaths) const;
 
 	virtual TSharedPtr<FStreamableHandle> LoadSoftObjects(const TArray<FSoftObjectPath>& SoftObjectPaths, const FName CollectionName = NAME_None);
-
-	static USoftObjectCollection* GetCollectionFromHandle(const FName CollectionID, const TSharedPtr<FStreamableHandle>& Handle);
-	static USoftObjectCollection* GetCollectionFromAssets(const FName CollectionID, const TArray<UObject*>& Assets);
 };

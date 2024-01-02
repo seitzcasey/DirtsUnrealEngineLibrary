@@ -37,8 +37,8 @@ TArray<FSoftObjectPath> USoftObjectCollection::GetSoftObjectsFromProperty(FPrope
 TArray<FSoftObjectPath> USoftObjectCollection::GetSoftObjectsToLoad() const
 {
 	TArray<FSoftObjectPath> Output;
-
-	for (TFieldIterator<FProperty> It(StaticClass()); It; ++It)
+	
+	for (TFieldIterator<FProperty> It(GetClass()); It; ++It)
 	{
 		FProperty* Property = *It;
 		void const* PropertyValue = Property->ContainerPtrToValuePtr<void>(this);
@@ -98,19 +98,12 @@ void USoftObjectSubsystem::UnloadSoftObjectCollection(const FName CollectionName
 	}
 }
 
-USoftObjectCollection* USoftObjectSubsystem::K2_GetLoadedCollectionByID(const FName ID, const FName CollectionName) const
+USoftObjectCollection* USoftObjectSubsystem::K2_GetLoadedCollectionByID(const FName ID) const
 {
-	if (!CollectionName.IsNone())
-	{
-		// If we receive a CollectionName, only check that one.
-		auto const* HandlePtr = LoadedCollections.Find(CollectionName);
-		return GetCollectionFromHandle(ID, HandlePtr ? *HandlePtr : nullptr);
-	}
-
 	// If we didn't receive a CollectionName, check em all.
-	for (auto const& [Name, Handle] : LoadedCollections)
+	for (const auto Collection : AllCollections)
 	{
-		if (auto* Collection = GetCollectionFromHandle(ID, Handle))
+		if (Collection->ID == ID)
 		{
 			return Collection;
 		}
@@ -136,15 +129,14 @@ void USoftObjectSubsystem::InitializeAllCollections()
 	{
 		CollectionPaths.Add(Collection.ToSoftObjectPath());
 	}
-
-	FStreamableManager StreamableManager;
+	
 	StreamableManager.RequestSyncLoad(CollectionPaths);
 
 	AllCollections.Empty(CollectionPaths.Num());
 	
 	for (auto const& Path : CollectionPaths)
 	{
-		AllCollections.Add(Path.ResolveObject());
+		AllCollections.Add(Cast<USoftObjectCollection>(Path.ResolveObject()));
 	}
 }
 
@@ -179,7 +171,6 @@ TSharedPtr<FStreamableHandle> USoftObjectSubsystem::LoadSoftObjects(const TArray
 		return nullptr;
 	}
 	
-	FStreamableManager StreamableManager;
 	auto Handle = StreamableManager.RequestAsyncLoad(SoftObjectPaths, []()
 	{
 		// Maybe add callback?
@@ -187,32 +178,4 @@ TSharedPtr<FStreamableHandle> USoftObjectSubsystem::LoadSoftObjects(const TArray
 
 	LoadedCollections.FindOrAdd(CollectionName) = Handle;
 	return Handle;
-}
-
-USoftObjectCollection* USoftObjectSubsystem::GetCollectionFromHandle(const FName CollectionID,
-	const TSharedPtr<FStreamableHandle>& Handle)
-{
-	if ensureAlways(Handle.IsValid())
-	{
-		TArray<UObject*> LoadedAssets;
-		Handle->GetLoadedAssets(LoadedAssets);
-
-		return GetCollectionFromAssets(CollectionID, LoadedAssets);
-	}
-	return nullptr;
-}
-
-USoftObjectCollection* USoftObjectSubsystem::GetCollectionFromAssets(const FName CollectionID, const TArray<UObject*>& Assets)
-{
-	for (auto* Asset : Assets)
-	{
-		if (auto* Collection = Cast<USoftObjectCollection>(Asset))
-		{
-			if (Collection->ID == CollectionID)
-			{
-				return Collection;
-			}
-		}
-	}
-	return nullptr;
 }
