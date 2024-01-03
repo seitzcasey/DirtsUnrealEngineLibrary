@@ -6,6 +6,8 @@
 #include "DirtButton.h"
 #include "UserInterface.h"
 
+UE_DEFINE_GAMEPLAY_TAG_COMMENT(DataManagement_ID_ModalWidgetClass, "DataManagement.ID.ModalWidgetClass", "Object ID for the UI");
+
 FModalPayloadBase::FModalPayloadBase()
 	: YesText(NSLOCTEXT("Prompt", "Yes", "Yes"))
 	, NoText(NSLOCTEXT("Prompt", "No", "No"))

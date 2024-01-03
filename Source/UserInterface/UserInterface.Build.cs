@@ -23,7 +23,7 @@ public class UserInterface : ModuleRules
                 "Engine",
                 "Slate",
                 "SlateCore",
-                "UMG"
+                "UMG",
             }
         );
     }

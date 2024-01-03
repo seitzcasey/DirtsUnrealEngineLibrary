@@ -27,7 +27,7 @@
 		{
 			"Name": "DataManagement",
 			"Type": "Runtime",
-			"LoadingPhase": "EarliestPossible"
+			"LoadingPhase": "Default"
 		}
 	],
 	"Plugins": [

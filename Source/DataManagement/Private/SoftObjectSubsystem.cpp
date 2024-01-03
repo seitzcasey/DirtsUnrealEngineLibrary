@@ -1,44 +1,93 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "SoftObjectSubsystem.h"
-#include "Engine/StreamableManager.h"
+#include "AlwaysLoadedSoftObjectCollection.h"
+#include "OnDemandSoftObjectCollection.h"
+
+UE_DEFINE_GAMEPLAY_TAG_COMMENT(DataManagement_Collection, "DataManagement.Collection", "Root Tag for CollectionTags");
+
+UE_DEFINE_GAMEPLAY_TAG_COMMENT(DataManagement_ID, "DataManagement.ID", "Root Tag for SoftObject IDs");
+
+UObject* USoftObjectCollection::K2_GetObject(FGameplayTag ID) const
+{
+	auto const* ObjectPtr = Objects.Find(ID);
+	if ensureAlways(ObjectPtr)
+	{
+		return ObjectPtr->Get();
+	}
+	return nullptr;
+}
+
+TSubclassOf<UObject> USoftObjectCollection::K2_GetClass(FGameplayTag ID) const
+{
+	auto const* ClassPtr = Classes.Find(ID);
+	if ensureAlways(ClassPtr)
+	{
+		return ClassPtr->Get();
+	}
+	return nullptr;
+}
 
 TArray<FSoftObjectPath> USoftObjectCollection::GetSoftObjectsFromProperty(FProperty* Property, const void* PropertyValue)
 {
-	TArray<FSoftObjectPath> Output;
+    TArray<FSoftObjectPath> Output;
 
-	if (auto const* SoftClassProp = CastField<FSoftClassProperty>(Property))
+	if (auto const* MapProp = CastField<FMapProperty>(Property))
 	{
-		if (auto const* Value = SoftClassProp->GetPropertyValuePtr(PropertyValue))
+		FScriptMapHelper MapHelper(MapProp, PropertyValue);
+		for (int32 Index = 0; Index < MapHelper.GetMaxIndex(); ++Index)
 		{
-			Output.Add(Value->ToSoftObjectPath());
-		}
-	}
-	else if (auto const* SoftObjectProp = CastField<FSoftObjectProperty>(Property))
-	{
-		if (auto const* Value = SoftObjectProp->GetPropertyValuePtr(PropertyValue))
-		{
-			Output.Add(Value->ToSoftObjectPath());
-		}
-	}
-	else if (auto const* StructProp = CastField<FStructProperty>(Property))
-	{
-		for (TFieldIterator<FProperty> It(StructProp->Struct); It; ++It)
-		{
-			void const* StructMemberPtr = It->ContainerPtrToValuePtr<void>(PropertyValue);
-			TArray<FSoftObjectPath> InnerPaths = GetSoftObjectsFromProperty(*It, StructMemberPtr);
-			Output.Append(InnerPaths);
-		}
-	}
+			// Process the key
+			TArray<FSoftObjectPath> KeyPaths = GetSoftObjectsFromProperty(MapProp->KeyProp, MapHelper.GetKeyPtr(Index));
+			Output.Append(KeyPaths);
 
-	return Output;
+			// Process the value
+			TArray<FSoftObjectPath> ValuePaths = GetSoftObjectsFromProperty(MapProp->ValueProp, MapHelper.GetValuePtr(Index));
+			Output.Append(ValuePaths);
+		}
+	}
+    else if (auto const* SoftClassProp = CastField<FSoftClassProperty>(Property))
+    {
+        if (auto const* Value = SoftClassProp->GetPropertyValuePtr(PropertyValue))
+        {
+            Output.Add(Value->ToSoftObjectPath());
+        }
+    }
+    else if (auto const* SoftObjectProp = CastField<FSoftObjectProperty>(Property))
+    {
+        if (auto const* Value = SoftObjectProp->GetPropertyValuePtr(PropertyValue))
+        {
+            Output.Add(Value->ToSoftObjectPath());
+        }
+    }
+    else if (auto const* StructProp = CastField<FStructProperty>(Property))
+    {
+        for (TFieldIterator<FProperty> It(StructProp->Struct); It; ++It)
+        {
+            void const* StructMemberPtr = It->ContainerPtrToValuePtr<void>(PropertyValue);
+            TArray<FSoftObjectPath> InnerPaths = GetSoftObjectsFromProperty(*It, StructMemberPtr);
+            Output.Append(InnerPaths);
+        }
+    }
+    else if (auto const* ArrayProp = CastField<FArrayProperty>(Property))
+    {
+        FScriptArrayHelper ArrayHelper(ArrayProp, PropertyValue);
+        for (int32 Index = 0; Index < ArrayHelper.Num(); ++Index)
+        {
+            void* ElementPtr = ArrayHelper.GetRawPtr(Index);
+            TArray<FSoftObjectPath> InnerPaths = GetSoftObjectsFromProperty(ArrayProp->Inner, ElementPtr);
+            Output.Append(InnerPaths);
+        }
+    }
+
+    return Output;
 }
 
 TArray<FSoftObjectPath> USoftObjectCollection::GetSoftObjectsToLoad() const
 {
 	TArray<FSoftObjectPath> Output;
 	
-	for (TFieldIterator<FProperty> It(GetClass()); It; ++It)
+	for (TFieldIterator<FProperty> It(UObject::GetClass()); It; ++It)
 	{
 		FProperty* Property = *It;
 		void const* PropertyValue = Property->ContainerPtrToValuePtr<void>(this);
@@ -49,67 +98,100 @@ TArray<FSoftObjectPath> USoftObjectCollection::GetSoftObjectsToLoad() const
 	return Output;
 }
 
+void USoftObjectCollection::CheckID(const FGameplayTag& ID)
+{
+	ensureAlways(ID.MatchesTag(DataManagement_ID));
+}
+
 USoftObjectSettings* USoftObjectSettings::Get()
 {
 	return StaticClass()->GetDefaultObject<USoftObjectSettings>();
 }
 
-USoftObjectSubsystem* USoftObjectSubsystem::Get()
+USoftObjectSubsystem* USoftObjectSubsystem::Get(const UObject* WorldContextObject)
 {
-	return GEngine->GetEngineSubsystem<USoftObjectSubsystem>();
+	auto const* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull);
+	auto const* GI = World ? World->GetGameInstance() : nullptr;
+	return GI ? GI->GetSubsystem<USoftObjectSubsystem>() : nullptr;
 }
 
 void USoftObjectSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	InitializeAllCollections();
-	
-	// Load AlwaysLoaded Collections
-	TArray<FSoftObjectPath> SoftObjectPaths;
-	GetAlwaysLoadedSoftObjectsToLoad(SoftObjectPaths);
-
-	LoadSoftObjects(SoftObjectPaths, AlwaysLoadedCollectionName);
+	LoadAlwaysLoadedCollections();	
 	
 	Super::Initialize(Collection);
 }
 
-TSharedPtr<FStreamableHandle> USoftObjectSubsystem::LoadSoftObjectCollection(const FName CollectionName)
+TSharedPtr<FStreamableHandle> USoftObjectSubsystem::LoadSoftObjectCollection(const FGameplayTag& CollectionTag)
 {
-#if WITH_EDITOR
-	if (CollectionName == AlwaysLoadedCollectionName)
-	{
-		// Error Message
-	}
-#endif
+	CheckCollectionTag(CollectionTag);
 	
 	TArray<FSoftObjectPath> SoftObjectPaths;
-	GetSoftObjectsToLoad(SoftObjectPaths, CollectionName);
+	GetSoftObjectsToLoad(CollectionTag, SoftObjectPaths);
 	
-	return LoadSoftObjects(SoftObjectPaths, CollectionName);
+	return LoadSoftObjects(CollectionTag, SoftObjectPaths);
 }
 
-void USoftObjectSubsystem::UnloadSoftObjectCollection(const FName CollectionName)
+bool USoftObjectSubsystem::K2_LoadSoftObjectCollection(FGameplayTag CollectionTag)
 {
-	if (auto const* HandlePtr = LoadedCollections.Find(CollectionName))
+	return LoadSoftObjectCollection(CollectionTag) != nullptr;
+}
+
+bool USoftObjectSubsystem::UnloadSoftObjectCollection(const FGameplayTag& CollectionTag)
+{
+	CheckCollectionTag(CollectionTag);
+	
+	if (auto const* HandlePtr = LoadedCollections.Find(CollectionTag))
 	{
 		auto const& Handle = *HandlePtr;
 		Handle->ReleaseHandle();
 
-		LoadedCollections.Remove(CollectionName);
+		LoadedCollections.Remove(CollectionTag);
+		return true;
 	}
+	return false;
 }
 
-USoftObjectCollection* USoftObjectSubsystem::K2_GetLoadedCollectionByID(const FName ID) const
+bool USoftObjectSubsystem::K2_UnloadSoftObjectCollection(FGameplayTag CollectionTag)
 {
-	// If we didn't receive a CollectionName, check em all.
-	for (const auto Collection : AllCollections)
+	return UnloadSoftObjectCollection(CollectionTag);
+}
+
+USoftObjectCollection* USoftObjectSubsystem::GetLoadedCollection(const FGameplayTag& CollectionTag) const
+{
+	CheckCollectionTag(CollectionTag);
+	
+	if ensureAlways(IsCollectionLoaded(CollectionTag))
 	{
-		if (Collection->ID == ID)
+		if (auto const* CollectionPtr = USoftObjectSettings::Get()->AlwaysLoadedCollections.Find(CollectionTag))
 		{
-			return Collection;
+			return CollectionPtr->Get();
+		}
+
+		if (auto const* CollectionPtr = USoftObjectSettings::Get()->OnDemandCollections.Find(CollectionTag))
+		{
+			return CollectionPtr->Get();
 		}
 	}
 
 	return nullptr;
+}
+
+USoftObjectCollection* USoftObjectSubsystem::K2_GetLoadedCollection(FGameplayTag CollectionTag) const
+{
+	return GetLoadedCollection(CollectionTag);
+}
+
+bool USoftObjectSubsystem::IsCollectionLoaded(const FGameplayTag& CollectionTag) const
+{
+	CheckCollectionTag(CollectionTag);
+	return LoadedCollections.Find(CollectionTag) != nullptr;
+}
+
+bool USoftObjectSubsystem::K2_IsCollectionLoaded(FGameplayTag CollectionTag) const
+{
+	return IsCollectionLoaded(CollectionTag);
 }
 
 void USoftObjectSubsystem::InitializeAllCollections()
@@ -120,30 +202,30 @@ void USoftObjectSubsystem::InitializeAllCollections()
 	TArray<FSoftObjectPath> CollectionPaths;
 	CollectionPaths.Reserve(NumAlwaysLoadedCollections + NumOnDemandCollections);
 	
-	for (auto const Collection : USoftObjectSettings::Get()->AlwaysLoadedCollections)
+	for (auto const& [CollectionTag, Collection] : USoftObjectSettings::Get()->AlwaysLoadedCollections)
 	{
 		CollectionPaths.Add(Collection.ToSoftObjectPath());
 	}
 
-	for (auto const& [Name, Collection] : USoftObjectSettings::Get()->OnDemandCollections)
+	for (auto const& [CollectionTag, Collection] : USoftObjectSettings::Get()->OnDemandCollections)
 	{
 		CollectionPaths.Add(Collection.ToSoftObjectPath());
 	}
 	
 	StreamableManager.RequestSyncLoad(CollectionPaths);
 
-	AllCollections.Empty(CollectionPaths.Num());
+	InitializedCollections.Empty(CollectionPaths.Num());
 	
 	for (auto const& Path : CollectionPaths)
 	{
-		AllCollections.Add(Cast<USoftObjectCollection>(Path.ResolveObject()));
+		InitializedCollections.Add(Cast<USoftObjectCollection>(Path.ResolveObject()));
 	}
 }
 
-void USoftObjectSubsystem::GetSoftObjectsToLoad(TArray<FSoftObjectPath>& SoftObjectPaths,
-                                                const FName CollectionName) const
+void USoftObjectSubsystem::GetSoftObjectsToLoad(const FGameplayTag& CollectionTag, TArray<FSoftObjectPath>& SoftObjectPaths) const
 {
-	if (auto const* CollectionPtr = USoftObjectSettings::Get()->OnDemandCollections.Find(CollectionName))
+	auto const* CollectionPtr = USoftObjectSettings::Get()->OnDemandCollections.Find(CollectionTag);
+	if ensureAlways(CollectionPtr)
 	{
 		const auto Collection = *CollectionPtr;
 		if ensureAlways(Collection.IsValid())
@@ -153,18 +235,18 @@ void USoftObjectSubsystem::GetSoftObjectsToLoad(TArray<FSoftObjectPath>& SoftObj
 	}
 }
 
-void USoftObjectSubsystem::GetAlwaysLoadedSoftObjectsToLoad(TArray<FSoftObjectPath>& SoftObjectPaths) const
+void USoftObjectSubsystem::GetAlwaysLoadedSoftObjectsToLoad(TMap<FGameplayTag, TArray<FSoftObjectPath>>& SoftObjectPaths) const
 {
-	for (const auto Collection : USoftObjectSettings::Get()->AlwaysLoadedCollections)
+	for (auto const& [CollectionTag, Collection] : USoftObjectSettings::Get()->AlwaysLoadedCollections)
 	{
 		if ensureAlways(Collection.IsValid())
 		{
-			SoftObjectPaths.Append(Collection->GetSoftObjectsToLoad());	
+			SoftObjectPaths.Add(CollectionTag, Collection->GetSoftObjectsToLoad());	
 		}
 	}
 }
 
-TSharedPtr<FStreamableHandle> USoftObjectSubsystem::LoadSoftObjects(const TArray<FSoftObjectPath>& SoftObjectPaths, const FName CollectionName)
+TSharedPtr<FStreamableHandle> USoftObjectSubsystem::LoadSoftObjects(const FGameplayTag& CollectionTag, const TArray<FSoftObjectPath>& SoftObjectPaths)
 {
 	if (SoftObjectPaths.IsEmpty())
 	{
@@ -176,6 +258,22 @@ TSharedPtr<FStreamableHandle> USoftObjectSubsystem::LoadSoftObjects(const TArray
 		// Maybe add callback?
 	}, FStreamableManager::DefaultAsyncLoadPriority, true);
 
-	LoadedCollections.FindOrAdd(CollectionName) = Handle;
+	LoadedCollections.FindOrAdd(CollectionTag) = Handle;
 	return Handle;
+}
+
+void USoftObjectSubsystem::CheckCollectionTag(const FGameplayTag& CollectionTag)
+{
+	ensureAlways(CollectionTag.MatchesTag(DataManagement_Collection));
+}
+
+void USoftObjectSubsystem::LoadAlwaysLoadedCollections()
+{
+	TMap<FGameplayTag, TArray<FSoftObjectPath>> SoftObjectPaths;
+	GetAlwaysLoadedSoftObjectsToLoad(SoftObjectPaths);
+
+	for (auto const& [CollectionTag, Paths] : SoftObjectPaths)
+	{
+		LoadSoftObjects(CollectionTag, Paths);	
+	}
 }

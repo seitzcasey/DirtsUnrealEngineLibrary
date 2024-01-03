@@ -20,7 +20,8 @@ public class DataManagement : ModuleRules
                 "CoreUObject",
                 "Engine",
                 "Slate",
-                "SlateCore"
+                "SlateCore",
+                "GameplayTags"
             }
         );
     }

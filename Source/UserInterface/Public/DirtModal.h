@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "CommonActivatableWidget.h"
+#include "NativeGameplayTags.h"
 #include "DirtModal.generated.h"
 
 class UDirtButton;
@@ -11,6 +12,8 @@ class UCommonTextBlock;
 
 DECLARE_DELEGATE_OneParam(FPromptDelegate, bool);
 DECLARE_DYNAMIC_DELEGATE_OneParam(FDynamicPromptDelegate, bool, bYes);
+
+USERINTERFACE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(DataManagement_ID_ModalWidgetClass);
 
 USTRUCT(BlueprintType)
 struct USERINTERFACE_API FModalPayloadBase
