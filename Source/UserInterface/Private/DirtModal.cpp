@@ -1,10 +1,10 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "DirtModal.h"
-#include "CommonTextBlock.h"
 #include "CommonUIExtensions.h"
 #include "DirtButton.h"
 #include "UserInterface.h"
+#include "Components/TextBlock.h"
 
 UE_DEFINE_GAMEPLAY_TAG_COMMENT(DataManagement_ID_ModalWidgetClass, "DataManagement.ID.ModalWidgetClass", "Object ID for the UI");
 

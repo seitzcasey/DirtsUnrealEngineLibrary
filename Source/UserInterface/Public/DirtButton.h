@@ -6,7 +6,7 @@
 #include "CommonButtonBase.h"
 #include "DirtButton.generated.h"
 
-class UCommonTextBlock;
+class UTextBlock;
 
 UCLASS()
 class USERINTERFACE_API UDirtButton : public UCommonButtonBase
@@ -18,7 +18,7 @@ protected:
     
 #pragma region UProperties
 	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UCommonTextBlock> TextBlock;
+	TObjectPtr<UTextBlock> TextBlock;
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Text")
 	FText ButtonText;

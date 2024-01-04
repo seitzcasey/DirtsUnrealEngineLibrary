@@ -7,8 +7,8 @@
 #include "NativeGameplayTags.h"
 #include "DirtModal.generated.h"
 
+class UTextBlock;
 class UDirtButton;
-class UCommonTextBlock;
 
 DECLARE_DELEGATE_OneParam(FPromptDelegate, bool);
 DECLARE_DYNAMIC_DELEGATE_OneParam(FDynamicPromptDelegate, bool, bYes);
@@ -59,10 +59,10 @@ protected:
     
 #pragma region UProperties
 	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UCommonTextBlock> TitleTextBlock;
+	TObjectPtr<UTextBlock> TitleTextBlock;
 	
 	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UCommonTextBlock> ModalTextBlock;
+	TObjectPtr<UTextBlock> ModalTextBlock;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UDirtButton> YesButton;

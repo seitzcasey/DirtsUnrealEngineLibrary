@@ -4,9 +4,9 @@
 #include "NativeGameplayTags.h"
 #include "Modules/ModuleManager.h"
 
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(UI_Layer_Game);
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(UI_Layer_Menu);
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(UI_Layer_Modal);
+USERINTERFACE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(UI_Layer_Game);
+USERINTERFACE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(UI_Layer_Menu);
+USERINTERFACE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(UI_Layer_Modal);
 
 class FUserInterfaceModule : public IModuleInterface
 {
