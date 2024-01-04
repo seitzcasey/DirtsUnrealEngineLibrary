@@ -75,7 +75,7 @@ private:
 };
 
 /** Settings for the SoftObjectSubsystem, these settings are used manage collections of static and dynamic data sets to be loaded during runtime.*/
-UCLASS(Config=Game, meta = (DisplayName = "Data Management"))
+UCLASS(Config=Game, DefaultConfig, meta = (DisplayName = "Data Management"))
 class DATAMANAGEMENT_API USoftObjectSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
