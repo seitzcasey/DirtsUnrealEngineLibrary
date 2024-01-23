@@ -2,3 +2,7 @@
 
 
 #include "DirtAbility.h"
+
+UDirtAbility::UDirtAbility()
+{
+}

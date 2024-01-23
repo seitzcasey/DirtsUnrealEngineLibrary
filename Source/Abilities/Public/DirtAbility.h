@@ -7,8 +7,19 @@
 
 #include "DirtAbility.generated.h"
 
-UCLASS()
+class UInputAction;
+
+UCLASS(Abstract)
 class ABILITIES_API UDirtAbility : public UGameplayAbility
 {
 	GENERATED_BODY()
+
+protected:
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Dirt Ability")
+	TObjectPtr<UInputAction> InputAction;
+	
+public:
+	UDirtAbility();
+
+	UInputAction* GetInputAction() const { return InputAction; }
 };

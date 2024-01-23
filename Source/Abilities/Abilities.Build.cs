@@ -20,7 +20,9 @@ public class Abilities : ModuleRules
                 "CoreUObject",
                 "Engine",
                 "Slate",
-                "SlateCore"
+                "SlateCore",
+                "EnhancedInput",
+                "GameplayTasks"
             }
         );
     }
